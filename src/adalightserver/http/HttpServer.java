@@ -32,7 +32,6 @@ import java.net.URLDecoder;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import javax.activation.MimetypesFileTypeMap;
 
@@ -145,7 +144,7 @@ public class HttpServer {
     }
     
     private void handleWebSocketFrame(ChannelHandlerContext ctx, TextWebSocketFrame frame) {
-        System.out.println("Received: " + frame.text());
+        // System.out.println("Received: " + frame.text());
         JsonSlurper slurper = new JsonSlurper();
         Object o = slurper.parseText(frame.text());
         if (!(o instanceof Map<?, ?>)) return;
@@ -186,7 +185,6 @@ public class HttpServer {
          .append("\", \"data\":")
          .append(data)
          .append("}");
-        System.out.println("Writing state: " + b.toString());
         return new TextWebSocketFrame(b.toString());
     }
     
@@ -274,9 +272,6 @@ public class HttpServer {
     class ServerHandler extends SimpleChannelInboundHandler<Object> {
         boolean isWebSocket = false;
         
-        ServerHandler() {
-        }
-        
         @Override
         public void channelActive(ChannelHandlerContext ctx) throws Exception {
             connections.add(ctx.channel());
@@ -345,42 +340,12 @@ public class HttpServer {
                             ctx.writeAndFlush(makeWebSocketEventFrame("stateChanged", lastState));
                         });
                         wsConnections.add(ctx.channel());
-                        System.out.println("Got a websocket connection");
                     }
-                } else if (path.equals("/stop")) {
-                    ledController.stop()
-                        .thenAccept(v -> sendHttpResponse(ctx, req, "Path Requested =>: " + req.getUri() + "\n"))
-                        .exceptionally(e -> { sendErrorResponse(ctx, req, BAD_REQUEST); return null; });;
-                }
-                else if (path.equals("/state")) {
-                    ledController.getStateAsJson()
-                        .thenAccept(state -> sendHttpResponse(ctx, req, state))
-                        .exceptionally(e -> { sendErrorResponse(ctx, req, BAD_REQUEST); return null; });
-                }
-                else if (path.startsWith("/script")) {
-                    if (path.equals("/script") || path.equals("/script/")) {
-                        ledController.getCurrentScript()
-                            .thenAccept(script -> sendHttpResponse(ctx, req, script))
-                            .exceptionally(e -> { sendErrorResponse(ctx, req, BAD_REQUEST); return null; });
-                    }
-                    else if (path.equals("/scripts") || path.equals("/scripts/")) {
-                        ledController.getAvailableScripts()
-                        .thenApply(scripts -> scripts.stream().collect(Collectors.joining("\n")))
-                        .thenAccept(l -> sendHttpResponse(ctx, req, l))
-                        .exceptionally(e -> { sendErrorResponse(ctx, req, BAD_REQUEST); return null; });
-                    }
-                    else if (path.startsWith("/script/")) {
-                        handleSetScriptRequest(ctx, req, path);
-                    }
-                    else {
-                        sendErrorResponse(ctx, req, NOT_FOUND);
-                    }
-                }
+                } 
                 else {
                     handleStaticFileRequest(ctx, req, path);
                 }
             } catch (Throwable e) {
-                System.err.println("Server => Error [" + req.getUri() + "] => " + e);
                 sendErrorResponse(ctx, req, BAD_REQUEST);
             }
         }
@@ -396,6 +361,7 @@ public class HttpServer {
         sendHttpResponse(ctx, req, new DefaultFullHttpResponse(HTTP_1_1, status));
     }
     
+    @SuppressWarnings("unused")
     private static void sendHttpResponse(ChannelHandlerContext ctx, FullHttpRequest req, String response) {
         FullHttpResponse res = new DefaultFullHttpResponse(HTTP_1_1, OK);
         ByteBuf buf = Unpooled.copiedBuffer(response, CharsetUtil.US_ASCII);
@@ -407,9 +373,9 @@ public class HttpServer {
     }
     
     private static void sendHttpResponse(ChannelHandlerContext ctx, FullHttpRequest req, FullHttpResponse res) {
-        res.headers().set("Access-Control-Allow-Methods", "POST, OPTIONS, GET");
-        res.headers().set("Access-Control-Allow-Origin", "*");
-        res.headers().set("Access-Control-Allow-Headers", "*");
+        // res.headers().set("Access-Control-Allow-Methods", "POST, OPTIONS, GET");
+        // res.headers().set("Access-Control-Allow-Origin", "*");
+        // res.headers().set("Access-Control-Allow-Headers", "*");
         
         // Generate an error page if response getStatus code is not OK (200).
         if (res.getStatus().code() != 200) {
@@ -425,36 +391,6 @@ public class HttpServer {
         }
     }
     
-    private void handleSetScriptRequest(ChannelHandlerContext ctx, FullHttpRequest req, String path) throws Exception {
-        String rem = path.substring(8); // because of /script/
-        String scriptName = "";
-        String params = "";
-        int pathSep = rem.indexOf('/');
-        if (pathSep == -1) scriptName = rem;
-        else {
-            scriptName = rem.substring(0, pathSep);
-            params = rem.substring(pathSep + 1);
-        }
-        
-        Map<String,String> paramMap = new HashMap<>();
-        String[] plist = params.split("&");
-        for (String s : plist) {
-            int i = s.indexOf('=');
-            if (i == -1) {
-                paramMap.put(s.toLowerCase(), "");
-            }
-            else {
-                String key = s.substring(0, i).toLowerCase();
-                String value = s.substring(i+1);
-                paramMap.put(key, value);
-            }
-        }
-        
-        ledController.setScript(scriptName, paramMap)
-            .thenAccept((v) -> sendHttpResponse(ctx, req, "Path Requested =>: " + req.getUri() + "\n"))
-            .exceptionally(e -> { sendErrorResponse(ctx, req, BAD_REQUEST); return null; });
-    }
-    
     private void handleStaticFileRequest(ChannelHandlerContext ctx, FullHttpRequest req, String path) throws Exception {
         
         if (req.getMethod() != HttpMethod.GET) {
@@ -462,7 +398,7 @@ public class HttpServer {
             return;
         }
         
-        if (path.equals("/")) path = "/adalightclient.html";
+        if (path.equals("/")) path = "/index.html";
         
         final String spath = sanitizeUri(path);
         if (spath == null) {
