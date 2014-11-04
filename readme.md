@@ -44,6 +44,7 @@ API is used which listens on the `/ws` path. The client application will utilize
 this.
 
 The daemon requires 2 commandline parameters:
+
 1. The name of the COM port which should be used to connect to Arduino
 2. The number of LEDs that the connected LED stripe provides. If not supplied a
    number of 50 LEDs will be used.
