@@ -17,6 +17,9 @@ The following diagram shows the required hardware and data flow:
 This server (developed in Java) sends the RGB data for the individual pixels
 through a serial connection to an Arduino board, which feeds the colors through
 SPI to the WS2801 LEDs.
+The server also supports a mode which uses a TCP/IP connection to support the
+lighting data instead of a direct serial connection. This allows to run the
+server on a different hardware than where the Arduino is connected to.
 
 For the Arduino board the usage of the firmware in the following repository is
 required: https://github.com/adafruit/Adalight/tree/master/Arduino/LEDstream
@@ -43,8 +46,16 @@ For actual controlling of the scripts and status information update a websocket
 API is used which listens on the `/ws` path. The client application will utilize
 this.
 
-The daemon requires 2 commandline parameters:
+The daemon requires at least 3 commandline parameters:
 
-1. The name of the COM port which should be used to connect to Arduino
-2. The number of LEDs that the connected LED stripe provides. If not supplied a
-   number of 50 LEDs will be used.
+1. The number of LEDs that the connected LED stripe provides
+2. The connection type between adalightserver and the LED Controller board.
+   Either a direct serial port connection can be used or a connection which
+   tunnels the serial port data over TCP/IP.  
+   If a direct serial port connection is used parameter 2 must be set to `serial`  
+   If the serial port data should be sent over IP instead parameter 2 must be set
+   to `ip`
+3. In case of connection type `serial` this is the name of the serialport to use,
+   e.g. `COM3` or `/dev/ttyusb`.  
+   In case of an connection over IP this is the hostname to connect to over TCP.
+4. In case of an IP connection this is the port number of the serial2ip converter.

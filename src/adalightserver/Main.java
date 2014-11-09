@@ -20,31 +20,78 @@ import java.io.IOException;
 import java.nio.file.Paths;
 
 import adalightserver.device.AdalightDevice;
+import adalightserver.device.IpAdalightDevice;
+import adalightserver.device.SerialAdalightDevice;
 import adalightserver.http.HttpServer;
 import adalightserver.scripting.ScriptManager;
 import adalightserver.types.ColorRgb;
 
 public class Main {
+    
+    private static void printUsageHelp() {
+        System.out.println("Usage: adalightserver nrLeds mode [serialport | [hostname port]]");
+        System.out.println("nrLeds (integer): Number of connected LEDs");
+        System.out.println("mode   (string) : ip or serial.");
+        System.out.println("  In case of serial the name of the serial port must follow");
+        System.out.println("  In case of ip the hostname and the port number of the ip2serial");
+        System.out.println("  daemon must follow");
+        System.out.println("");
+    }
+    
     public static void main(String [] args) {
+        if (args.length < 3) {
+            printUsageHelp();
+            return;
+        }
+        
+        AdalightDevice device = null;
+        String mode = "serial";
+        String comPort = "COM3";
+        String host = "localhost";
+        int port = 80;
+        int ledCount = 50;
+        
+        try {
+            ledCount = Integer.parseInt(args[0]);
+        } catch (Exception e) {
+            System.err.println("Can not convert " + args[0] + " to the number of attached LEDs");
+            printUsageHelp();
+            return;
+        }
+        
+        mode = args[1];
+        if (mode.equals("serial")) {
+            comPort = args[2];
+        } else if (mode.equals("ip")) {
+            if (args.length < 4) {
+                printUsageHelp();
+                return;
+            }
+            host = args[2];
+            try {
+                port = Integer.parseInt(args[3]);
+            } catch (Exception e) {
+                System.err.println("Can not convert " + args[3] + " to the used port number");
+                printUsageHelp();
+                return;
+            }
+        } else {
+            System.out.println("Invalid mode: " + mode);
+            printUsageHelp();
+            return;
+        }
+        
         System.out.println("Starting Adalightserver!");
         System.out.println("Press any key to shut down");
         
-        AdalightDevice device;
-        String port = "COM3";
-        int ledCount = 50;
-        if (args.length >= 1) port = args[0];
-        if (args.length >= 2) {
-            try {
-                ledCount = Integer.parseInt(args[1]);
-            } catch (Exception e) {
-                System.err.println("Can not convert " + args[1] + " to the number of attached LEDs");
-                return;
-            }
+        if (mode.equals("ip")) {
+            device = new IpAdalightDevice(host, port);
+        } else if (mode.equals("serial")) {
+            device = new SerialAdalightDevice(comPort);
         }
         
         try {
-            device = new AdalightDevice(port);
-            device.openPort();
+            device.open();
             device.setLedCount(ledCount);
             device.setAllLedsToColor(new ColorRgb(0,0,0));
             device.flush();
@@ -70,6 +117,6 @@ public class Main {
         
         scriptManager.stopWatch();
         
-        device.closePort();
+        device.close();
 	}
 }

@@ -20,112 +20,31 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Enumeration;
 import java.util.List;
 
 import adalightserver.types.ColorRgb;
 import adalightserver.types.LedApi;
-import gnu.io.CommPortIdentifier;
-import gnu.io.PortInUseException;
-import gnu.io.SerialPort;
-import gnu.io.UnsupportedCommOperationException;
 
-public class AdalightDevice implements LedApi {
-    private String comPort;
-    private SerialPort serialPort = null;
-    private OutputStream outputStream;
-    private Thread writeThread = null;
+public abstract class AdalightDevice implements LedApi {
+    protected OutputStream outputStream;
+    protected Thread writeThread = null;
+    
+    protected static final int MAX_LEDS = 1024;
 
-    private static final int BAUDRATE = 115200;
-    private static final int DATA_BITS = SerialPort.DATABITS_8;
-    private static final int STOP_BITS = SerialPort.STOPBITS_1;
-    private static final int PARITY = SerialPort.PARITY_NONE;
-    private static final int MAX_LEDS = 1024;
+    protected List<ColorRgb> frontBuffer = new ArrayList<ColorRgb>();
+    protected List<ColorRgb> backBuffer = new ArrayList<ColorRgb>();
+    protected boolean bufferUpdated = false;
 
-    private List<ColorRgb> frontBuffer = new ArrayList<ColorRgb>();
-    private List<ColorRgb> backBuffer = new ArrayList<ColorRgb>();
-    private boolean bufferUpdated = false;
+    protected Object mutex = new Object();
+    protected Boolean stopThread = true;
 
-    private Object mutex = new Object();
-    private Boolean stopThread = true;
-
-    public AdalightDevice(String comPort) {
-        this.comPort = comPort;
+    protected AdalightDevice() {
     }
+    
+    abstract public void open() throws Exception;
+    abstract public void close();
 
-    public void openPort() throws Exception {
-
-        Boolean foundPort = false;
-        CommPortIdentifier serialPortId = null;
-        if (serialPort != null) return;
-
-        @SuppressWarnings("unchecked")
-        Enumeration<CommPortIdentifier> enumComm = CommPortIdentifier.getPortIdentifiers();
-        while(enumComm.hasMoreElements()) {
-            serialPortId = enumComm.nextElement();
-            if (comPort.contentEquals(serialPortId.getName())) {
-                foundPort = true;
-                break;
-            }
-        }
-
-        if (foundPort != true)
-            throw new Exception("Can not find serial port " + comPort);		
-
-        try {
-            serialPort = (SerialPort) serialPortId.open("AdaLightServer", 500);
-        } catch (PortInUseException e) {
-            throw new Exception("Serial port is in use");
-        }
-
-        try {
-            outputStream = serialPort.getOutputStream();
-        } catch (IOException e) {
-            throw new Exception("Error getting output stream: " + e.getMessage());
-        }
-
-        try {
-            serialPort.setSerialPortParams(BAUDRATE, DATA_BITS, STOP_BITS, PARITY);
-        } catch(UnsupportedCommOperationException e) {
-            throw new Exception("Can not set port parameters: " + e.getMessage());
-        }
-
-        stopThread = false;
-        writeThread = new Thread(() -> writeThreadProc());
-        writeThread.start();
-    }
-
-    public void closePort() {
-        System.out.println("Closing Serial Port");
-        synchronized (mutex) {
-            // Switch light off
-            // Will get flushed before thread stops
-            for (int i = 0; i < frontBuffer.size(); i++) {
-                frontBuffer.set(i, new ColorRgb(0, 0, 0));
-            }
-            stopThread = true;
-            mutex.notifyAll();
-        }
-        if (writeThread != null) {
-            try {
-                writeThread.join();
-            } catch (InterruptedException e) {
-            }
-            writeThread = null;
-        }
-        if (outputStream != null) {
-            try { outputStream.close(); }
-            catch (Exception e) {}
-            outputStream = null;
-        }
-        if (serialPort != null) {
-            try { serialPort.close(); }
-            catch (Exception e) {}
-            serialPort = null;
-        }
-    }
-
-    private void writeThreadProc() {
+    protected void writeThreadProc() {
         ByteBuffer buffer = null;
         int bufferSize = -1;
         boolean stop = false;
@@ -180,6 +99,7 @@ public class AdalightDevice implements LedApi {
                     outputStream.flush();
                 } catch (IOException e) {
                     e.printStackTrace();
+                    return;
                 }
             }
         }
